@@ -14,7 +14,14 @@ RUN git clone https://github.com/langchain-ai/langchain . \
  && git reflog expire --expire=now --all \
  && git gc --prune=now \
  && { test ! -s .gitmodules || git submodule update --init --recursive; }
-RUN pip install --no-cache-dir -e "libs/core" pytest pytest-asyncio pytest-mock
+# langchain-core is its own uv project (libs/core/uv.lock with a `test` dependency group, which is what
+# upstream CI syncs). mars-base's uv 0.9.18 cannot read this lockfile; the environment lives outside /app.
+ENV UV_PROJECT_ENVIRONMENT=/opt/venv
+RUN pip install --no-cache-dir "uv==0.12.9" \
+    && cd libs/core \
+    && python -m uv sync --frozen --no-default-groups --group test \
+    && test -z "$(git status --porcelain)"
+ENV PATH="/opt/venv/bin:${PATH}"
 
 # Disable git commit hooks (pre-commit, husky etc.): dev-workflow tooling, not task content.
 # Broken hook environments otherwise block the agent's (and oracle's) commits.
